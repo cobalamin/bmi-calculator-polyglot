@@ -3,32 +3,30 @@
 
 (defonce bmi-data (r/atom {:height 180 :weight 80}))
 
-(defn calc-bmi []
+(defn calc-bmi [height weight]
   "Calculate the body mass index for the given height and weight."
-  (let [{:keys [height weight bmi] :as data} @bmi-data
-        h (/ height 100)]  ;; Height in meters instead of centimeters.
-    (if (nil? bmi)
-      (assoc data :bmi (/ weight (* h h)))  ;; Set the BMI from the weight.
-      (assoc data :weight (* bmi h h)))))  ;; Set the weight from the BMI.
+  (let [h (/ height 100)]
+    (/ weight (* h h))))
 
-(defn slider [param value min max]
+(defn slider [param value min max & [recalc-with]]
   [:input {:type "range" :value value :min min :max max
            :style {:width "100%"}
            :on-change (fn [e]
-                        (swap! bmi-data assoc param (.-target.value e))
-                        ;; If we didn't move the bmi slider, recompute it from
-                        ;; the height and weight values (see `if nil? bmi` in
-                        ;; the `calc-bmi` function).
-                        (when (not= param :bmi)
-                          (swap! bmi-data assoc :bmi nil)))}])
+                        (if (= param :bmi)
+                          (let [bmi (.-target.value e)
+                                h (/ recalc-with 100)
+                                weight (* bmi (* h h))]
+                            (swap! bmi-data assoc :weight weight))
+                          (swap! bmi-data assoc param (.-target.value e))))}])
 
 (defn bmi-component []
-  (let [{:keys [weight height bmi]} (calc-bmi)
+  (let [{:keys [height weight]} @bmi-data
+        bmi (calc-bmi height weight)
         [color diagnostic] (cond
-                          (< bmi 18.5) ["orange" "underweight"]
-                          (< bmi 25) ["inherit" "normal"]
-                          (< bmi 30) ["orange" "overweight"]
-                          :else ["red" "obese"])]
+                             (< bmi 18.5) ["orange" "underweight"]
+                             (< bmi 25) ["inherit" "normal"]
+                             (< bmi 30) ["orange" "overweight"]
+                             :else ["red" "obese"])]
     [:div
      [:div
       "Height: " (int height) "cm"
@@ -39,7 +37,7 @@
      [:div
       "BMI: " (int bmi) " "
       [:span {:style {:color color}} diagnostic]
-      [slider :bmi bmi 10 50]]]))
+      [slider :bmi bmi 10 50 height]]]))
 
 (defn init []
   (r/render-component [bmi-component]
